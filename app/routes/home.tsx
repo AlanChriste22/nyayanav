@@ -41,10 +41,10 @@ export default function Home() {
             <FluidOrb size={34} color="#1D4ED8" />
             <div>
               <h1 className="text-base font-bold tracking-tight text-foreground">
-                LexIndia
+                NyayaNav
               </h1>
               <p className="text-xs text-muted-foreground">
-                AI Legal Precedent &amp; Memo Assistant
+                Find the precedent that matters.
               </p>
             </div>
           </div>
@@ -150,7 +150,7 @@ export default function Home() {
 
       {/* Simple Footer */}
       <footer className="border-t border-border bg-muted/20 px-4 py-4 text-center text-xs text-muted-foreground">
-        LexIndia · Indian Legal Documents Corpus (ILDC) Precedent Assistant
+        NyayaNav · Find the precedent that matters.
       </footer>
 
       {/* Judgment Deep-Dive Drawer */}

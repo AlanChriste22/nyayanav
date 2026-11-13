@@ -15,7 +15,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>LexIndia — AI Legal Precedent & Memo Assistant</title>
+        <title>NyayaNav — Find the precedent that matters.</title>
         <meta
           name="description"
           content="Agentic AI Precedent Research, Dual-Model FAISS Vector Retrieval (InLegalBERT vs MiniLM), Reasoning Pattern Extraction, and Memorandum Drafting on the Indian Legal Documents Corpus (ILDC)."

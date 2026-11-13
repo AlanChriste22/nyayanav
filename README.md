@@ -1,4 +1,4 @@
-# LEX-ILDC // Agentic Indian Legal Precedent Navigator
+# NyayaNav — Find the precedent that matters.
 
 A full-stack **Agentic AI Legal Precedent Research Workbench** and **Dual-Model Vector Retrieval Pipeline** built on the **Indian Legal Documents Corpus (ILDC)**.
 
