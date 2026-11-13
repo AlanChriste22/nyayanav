@@ -8,7 +8,6 @@ import {
 } from '~/lib/legal-agent'
 import { Button } from '~/components/ui/button'
 import { StepPlayer } from '~/components/ui/step-player'
-import { RailTOC } from '~/components/ui/rail-toc'
 import { AnimatedCounter } from '~/components/ui/animated-counter'
 import { cn } from '~/lib/utils'
 
@@ -18,6 +17,14 @@ export interface AgentWorkbenchProps {
     state: 'idle' | 'intake' | 'researching' | 'synthesizing' | 'ready',
     latencyMs?: number,
   ) => void
+}
+
+const FRIENDLY_LABELS: Record<string, string> = {
+  contract_breach: 'Contract Dispute',
+  criminal_appeal: 'Criminal Appeal (Sec 302)',
+  land_acquisition: 'Land Acquisition',
+  tax: 'Income Tax Notice',
+  labour: 'Labour & Firing (Sec 25F)',
 }
 
 export function AgentWorkbench({
@@ -33,8 +40,8 @@ export function AgentWorkbench({
   const [refinements, setRefinements] = React.useState<Record<string, string>>(
     {},
   )
-  const [customAddendum, setCustomAddendum] = React.useState<string>('')
-  const [topK, setTopK] = React.useState<number>(10)
+  const [customNote, setCustomNote] = React.useState<string>('')
+  const [showAiSteps, setShowAiSteps] = React.useState<boolean>(false)
 
   const [intake, setIntake] = React.useState<IntakeAnalysis>(() =>
     analyzeIntakeFacts(SAMPLE_QUERIES[0].text),
@@ -45,46 +52,36 @@ export function AgentWorkbench({
 
   const [activeStepIdx, setActiveStepIdx] = React.useState<number>(4)
   const [isPlayingTrace, setIsPlayingTrace] = React.useState<boolean>(false)
-  const [activeMemoSectionId, setActiveMemoSectionId] = React.useState<string>(
-    'questions-presented',
-  )
   const [copiedMemo, setCopiedMemo] = React.useState<boolean>(false)
 
   const selectPreset = (preset: (typeof SAMPLE_QUERIES)[number]) => {
     setSelectedPresetId(preset.id)
     setFactsInput(preset.text)
     setRefinements({})
-    setCustomAddendum('')
+    setCustomNote('')
     onStatusChange?.('intake', 18)
     const nextIntake = analyzeIntakeFacts(preset.text)
     setIntake(nextIntake)
-    const nextRes = runAutonomousResearch(preset.text, {}, topK)
+    const nextRes = runAutonomousResearch(preset.text, {}, 10)
     setResearch(nextRes)
     setActiveStepIdx(4)
     setTimeout(() => onStatusChange?.('ready', 129), 180)
   }
 
-  const handleAnalyzeIntake = () => {
-    onStatusChange?.('intake', 18)
-    const nextIntake = analyzeIntakeFacts(factsInput)
-    setIntake(nextIntake)
-  }
-
-  const executeFullAgentResearch = () => {
+  const runResearch = () => {
     onStatusChange?.('researching')
     setIsPlayingTrace(true)
     setActiveStepIdx(0)
 
     const mergedRefinements = { ...refinements }
-    if (customAddendum.trim()) {
-      mergedRefinements.counsel_note = customAddendum.trim()
+    if (customNote.trim()) {
+      mergedRefinements.counsel_note = customNote.trim()
     }
 
-    const result = runAutonomousResearch(factsInput, mergedRefinements, topK)
+    const result = runAutonomousResearch(factsInput, mergedRefinements, 10)
     setIntake(result.intake)
     setResearch(result)
 
-    // Animate step player progression
     let step = 0
     const interval = setInterval(() => {
       step += 1
@@ -97,7 +94,7 @@ export function AgentWorkbench({
         const totalMs = result.steps.reduce((a, b) => a + b.duration_ms, 0)
         onStatusChange?.('ready', totalMs)
       }
-    }, 140)
+    }, 120)
   }
 
   const toggleAnswer = (questionId: string, option: string) => {
@@ -128,17 +125,9 @@ export function AgentWorkbench({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `ILDC_Legal_Memo_${intake.detected_domain}.md`
+    a.download = `Legal_Memo_${intake.detected_domain}.md`
     a.click()
     URL.revokeObjectURL(url)
-  }
-
-  const scrollToSection = (secId: string) => {
-    setActiveMemoSectionId(secId)
-    if (typeof document !== 'undefined') {
-      const el = document.getElementById(`memo-sec-${secId}`)
-      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
   }
 
   const totalOutcomes =
@@ -148,25 +137,26 @@ export function AgentWorkbench({
     ) || 1
 
   return (
-    <div className="space-y-6">
-      {/* Preset Case Matters Strip */}
-      <div className="border border-border bg-card p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="bg-[#1D4ED8] px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
-              STAGE 01
-            </span>
-            <h2 className="text-xs font-bold uppercase tracking-wider">
-              MATTER BRIEF INTAKE & INTERACTIVE FACT REFINEMENT
+    <div className="space-y-8">
+      {/* Step 1 & 2: Clean Case Input + 3 Simple Questions */}
+      <section className="rounded-xl border border-border bg-card p-6 shadow-xs space-y-6">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground">
+              1. Describe Your Case
             </h2>
+            <p className="text-sm text-muted-foreground">
+              Pick an example below or write your client&apos;s facts in plain
+              language.
+            </p>
           </div>
-          <span className="text-[11px] text-muted-foreground">
-            Select a benchmark query from <code>retrieve.py</code> or enter
-            custom client facts
+          <span className="inline-flex items-center self-start rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium text-foreground">
+            Area of Law: {intake.detected_domain_label}
           </span>
         </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+        {/* Example Matter Pills */}
+        <div className="flex flex-wrap gap-2">
           {SAMPLE_QUERIES.map((q) => {
             const active = selectedPresetId === q.id
             return (
@@ -175,167 +165,93 @@ export function AgentWorkbench({
                 type="button"
                 onClick={() => selectPreset(q)}
                 className={cn(
-                  'flex flex-col justify-between border p-2.5 text-left transition-colors cursor-pointer',
+                  'rounded-lg border px-3.5 py-2 text-xs font-medium transition-all cursor-pointer',
                   active
-                    ? 'border-[#1D4ED8] bg-[#1D4ED8]/10 text-foreground'
-                    : 'border-border bg-background hover:bg-muted/40 text-muted-foreground',
+                    ? 'border-[#1D4ED8] bg-[#1D4ED8] text-white shadow-xs'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                 )}
               >
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-[10px] font-bold uppercase text-foreground">
-                    {q.name}
-                  </span>
-                  <span className="border border-border bg-muted/50 px-1 py-0.2 text-[9px] tabular-nums">
-                    {q.statute_tag}
-                  </span>
-                </div>
-                <div className="mt-1.5 text-[11px] leading-snug line-clamp-2">
-                  {q.label}
-                </div>
+                {FRIENDLY_LABELS[q.id] ?? q.label}
               </button>
             )
           })}
         </div>
 
-        {/* Fact Editor & Intake Clarification Grid */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-          <div className="lg:col-span-5 flex flex-col justify-between space-y-3 border border-border bg-background p-3.5">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="lawyer-facts-input"
-                  className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  CLIENT FACT NARRATIVE / APPELLATE GROUNDS
-                </label>
-                <span className="text-[10px] text-muted-foreground tabular-nums">
-                  {factsInput.length} chars
-                </span>
-              </div>
+        {/* Two-column clean input */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* Left: Case Facts */}
+          <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <label
+                htmlFor="simple-facts-input"
+                className="block text-xs font-semibold text-foreground"
+              >
+                Case Facts
+              </label>
               <textarea
-                id="lawyer-facts-input"
-                rows={5}
+                id="simple-facts-input"
+                rows={6}
                 value={factsInput}
                 onChange={(e) => {
                   setFactsInput(e.target.value)
                   setSelectedPresetId('custom')
+                  setIntake(analyzeIntakeFacts(e.target.value))
                 }}
-                placeholder="Paste raw client facts, lower court findings, or statutory challenge..."
-                className="w-full border border-border bg-muted/20 p-3 text-xs leading-relaxed text-foreground focus:border-[#1D4ED8] focus:outline-none"
+                placeholder="Describe what happened, what court order is challenged, and what relief your client wants..."
+                className="w-full rounded-lg border border-border bg-background p-3.5 text-sm leading-relaxed text-foreground focus:border-[#1D4ED8] focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/20"
               />
 
-              <div className="pt-1">
+              <div>
                 <label
-                  htmlFor="lawyer-addendum-input"
-                  className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1"
+                  htmlFor="simple-custom-note"
+                  className="block text-xs font-medium text-muted-foreground mb-1.5"
                 >
-                  ADDITIONAL COUNSEL INSTRUCTIONS / PROCEDURAL NOTES (OPTIONAL)
+                  Any extra detail? (Optional)
                 </label>
                 <input
-                  id="lawyer-addendum-input"
+                  id="simple-custom-note"
                   type="text"
-                  value={customAddendum}
-                  onChange={(e) => setCustomAddendum(e.target.value)}
-                  placeholder="e.g., Emphasize hostile panch witnesses and delay in FIR registration..."
-                  className="w-full border border-border bg-muted/20 px-2.5 py-1.5 text-xs text-foreground focus:border-[#1D4ED8] focus:outline-none"
+                  value={customNote}
+                  onChange={(e) => setCustomNote(e.target.value)}
+                  placeholder="e.g., Emphasize delay in notice or missing evidence..."
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-[#1D4ED8] focus:outline-none"
                 />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-muted-foreground">
-                  TOP-K:
-                </span>
-                {[5, 10, 15].map((kVal) => (
-                  <button
-                    key={kVal}
-                    type="button"
-                    onClick={() => setTopK(kVal)}
-                    className={cn(
-                      'border px-2 py-0.5 text-[11px] tabular-nums cursor-pointer',
-                      topK === kVal
-                        ? 'border-[#1D4ED8] bg-[#1D4ED8] text-white'
-                        : 'border-border bg-background text-muted-foreground',
-                    )}
-                  >
-                    k={kVal}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAnalyzeIntake}
-                >
-                  DETECT ISSUES
-                </Button>
-                <Button
-                  variant="cobalt"
-                  size="sm"
-                  onClick={executeFullAgentResearch}
-                >
-                  RUN AGENTIC RESEARCH & DRAFT MEMO
-                </Button>
-              </div>
-            </div>
+            <Button
+              variant="cobalt"
+              size="lg"
+              className="w-full rounded-lg text-sm font-semibold py-5"
+              onClick={runResearch}
+            >
+              Find Similar Cases &amp; Draft Legal Memo
+            </Button>
           </div>
 
-          {/* Right: Agent Fact-Refinement Follow-Up Questions */}
-          <div className="lg:col-span-7 border border-border bg-background p-3.5 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2.5">
-              <div>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  AGENT FACT-REFINEMENT INTERROGATOR ·{' '}
-                </span>
-                <span className="text-[11px] font-bold text-[#1D4ED8] dark:text-blue-400">
-                  {intake.detected_domain_label}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="border border-border bg-muted/40 px-2 py-0.5 text-[10px] tabular-nums">
-                  FACT COMPLETENESS:{' '}
-                  <strong>
-                    {Math.min(
-                      100,
-                      intake.completeness_score +
-                        Object.keys(refinements).length * 12,
-                    )}
-                    %
-                  </strong>
-                </span>
-              </div>
+          {/* Right: 3 Simple Follow-up Questions */}
+          <div className="lg:col-span-7 rounded-xl border border-border bg-muted/20 p-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                2. Quick Follow-up Questions (Optional)
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Click any option that applies to sharpen your legal memo.
+              </p>
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
-              {intake.statutory_hooks.map((st) => (
-                <span
-                  key={st}
-                  className="border border-border bg-muted/30 px-2 py-0.5 text-[10px] font-medium text-foreground"
-                >
-                  § {st}
-                </span>
-              ))}
-            </div>
-
-            <div className="space-y-2.5">
-              {intake.questions.map((q, qIdx) => {
+            <div className="space-y-3">
+              {intake.questions.map((q, idx) => {
                 const selectedAns = refinements[q.id]
                 return (
                   <div
                     key={q.id}
-                    className="border border-border bg-muted/15 p-2.5 space-y-1.5"
+                    className="rounded-lg border border-border bg-background p-3.5 space-y-2"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-semibold text-foreground">
-                        Q{qIdx + 1}. {q.question}
-                      </p>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      Why it matters: {q.why_it_matters}
+                    <p className="text-xs font-semibold text-foreground">
+                      {idx + 1}. {q.question}
                     </p>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
+                    <div className="flex flex-wrap gap-1.5">
                       {q.options.map((opt) => {
                         const isPicked = selectedAns === opt
                         return (
@@ -344,13 +260,13 @@ export function AgentWorkbench({
                             type="button"
                             onClick={() => toggleAnswer(q.id, opt)}
                             className={cn(
-                              'border px-2 py-1 text-[10px] text-left transition-colors cursor-pointer',
+                              'rounded-md border px-2.5 py-1.5 text-xs text-left transition-colors cursor-pointer',
                               isPicked
                                 ? 'border-[#1D4ED8] bg-[#1D4ED8] text-white font-medium'
-                                : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                                : 'border-border bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted',
                             )}
                           >
-                            {isPicked ? '✓ ' : '+ '}
+                            {isPicked ? '✓ ' : ''}
                             {opt}
                           </button>
                         )
@@ -362,154 +278,138 @@ export function AgentWorkbench({
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Optional collapsible AI Trace */}
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">
+          3. Your Legal Research &amp; Drafted Memo
+        </h2>
+        <button
+          type="button"
+          onClick={() => setShowAiSteps((v) => !v)}
+          className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+        >
+          {showAiSteps ? 'Hide AI Thinking Steps' : 'Show AI Thinking Steps'}
+        </button>
       </div>
 
-      {/* Stage 2: Rare UI StepPlayer Autonomous Multi-Step Research Trace */}
-      <StepPlayer
-        steps={research.steps}
-        activeStepIndex={activeStepIdx}
-        onSelectStep={setActiveStepIdx}
-        isPlaying={isPlayingTrace}
-        onReplay={executeFullAgentResearch}
-      />
+      {showAiSteps && (
+        <StepPlayer
+          steps={research.steps}
+          activeStepIndex={activeStepIdx}
+          onSelectStep={setActiveStepIdx}
+          isPlaying={isPlayingTrace}
+          onReplay={runResearch}
+          className="rounded-xl overflow-hidden"
+        />
+      )}
 
-      {/* Stage 3: Legal Memorandum + Precedent & Pattern Telemetry */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-        {/* Left/Center: Court-Ready Legal Memorandum + RailTOC */}
-        <div className="xl:col-span-8 space-y-4">
-          <div className="border border-border bg-card">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-4 py-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white uppercase">
-                    STAGE 03
-                  </span>
-                  <h3 className="text-xs font-bold uppercase tracking-wider">
-                    {research.memorandum.title}
-                  </h3>
-                </div>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Synthesized from Top-{research.legal_hits.length} ILDC cases (
-                  <code>law-ai/InLegalBERT</code>) &amp;{' '}
-                  {research.patterns.co_cited_precedents.length} co-cited
-                  Supreme Court authorities
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleCopyMemo}>
-                  {copiedMemo ? 'MEMO COPIED' : 'COPY MARKDOWN'}
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleDownloadMemo}
-                >
-                  EXPORT .MD
-                </Button>
-              </div>
+      {/* Results: Left = Clean Readable Memo, Right = Similar Past Cases + Odds */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Drafted Legal Memo */}
+        <div className="lg:col-span-8 rounded-xl border border-border bg-card shadow-xs overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-6 py-4">
+            <div>
+              <h3 className="text-base font-semibold text-foreground">
+                {research.memorandum.title}
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Based on {research.legal_hits.length} similar Indian court
+                judgments
+              </p>
             </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-lg"
+                onClick={handleCopyMemo}
+              >
+                {copiedMemo ? 'Copied!' : 'Copy Memo'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="rounded-lg"
+                onClick={handleDownloadMemo}
+              >
+                Download (.md)
+              </Button>
+            </div>
+          </div>
 
-            <div className="grid grid-cols-1 divide-y divide-border lg:grid-cols-12 lg:divide-x lg:divide-y-0">
-              {/* Rail TOC Navigation */}
-              <div className="lg:col-span-4 p-3 bg-muted/10">
-                <RailTOC
-                  items={research.memorandum.sections.map((s) => ({
-                    id: s.id,
-                    heading: s.heading,
-                    badge: `${s.cited_cases.length}`,
-                  }))}
-                  activeId={activeMemoSectionId}
-                  onSelect={scrollToSection}
-                  className="border-0 bg-transparent p-0"
-                />
-
-                {/* Key Outcome Metric Box inside Rail */}
-                <div className="mt-4 border border-border bg-background p-3 space-y-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    EMPIRICAL RELIEF INDEX
-                  </div>
-                  <div className="flex items-baseline justify-between">
-                    <AnimatedCounter
-                      value={research.memorandum.winning_probability_pct}
-                      suffix="%"
-                      className="text-2xl font-bold text-[#1D4ED8] dark:text-blue-400"
-                    />
-                    <span className="border border-border bg-muted/50 px-1.5 py-0.5 text-[10px] font-semibold uppercase">
-                      MODAL: {research.memorandum.dominant_outcome}
+          <div className="p-6 space-y-6">
+            {research.memorandum.sections.map((sec) => (
+              <article
+                key={sec.id}
+                className="space-y-2 border-b border-border pb-5 last:border-b-0 last:pb-0"
+              >
+                <h4 className="text-sm font-semibold text-foreground">
+                  {sec.heading}
+                </h4>
+                <div className="whitespace-pre-line text-sm leading-relaxed text-foreground/90">
+                  {sec.content}
+                </div>
+                {sec.cited_cases.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 pt-1.5">
+                    <span className="text-xs text-muted-foreground">
+                      Read full case:
                     </span>
+                    {sec.cited_cases.map((cid) => (
+                      <button
+                        key={cid}
+                        type="button"
+                        onClick={() => onInspectCase(cid)}
+                        className="rounded-md border border-[#1D4ED8]/30 bg-[#1D4ED8]/10 px-2.5 py-0.5 font-mono text-xs font-medium text-[#1D4ED8] dark:text-blue-300 hover:bg-[#1D4ED8] hover:text-white transition-colors cursor-pointer"
+                      >
+                        {cid}
+                      </button>
+                    ))}
                   </div>
-                  <p className="text-[10px] text-muted-foreground leading-snug">
-                    Computed from disposition ratios across retrieved ILDC
-                    precedents in this cluster.
-                  </p>
-                </div>
-              </div>
-
-              {/* Memo Content Body */}
-              <div className="lg:col-span-8 p-5 space-y-6">
-                {research.memorandum.sections.map((sec) => (
-                  <article
-                    key={sec.id}
-                    id={`memo-sec-${sec.id}`}
-                    className="space-y-2 border-b border-border pb-5 last:border-b-0 last:pb-0"
-                  >
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                      {sec.heading}
-                    </h4>
-                    <div className="whitespace-pre-line text-xs leading-relaxed text-foreground/90 max-w-[70ch]">
-                      {sec.content}
-                    </div>
-                    {sec.cited_cases.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <span className="text-[10px] text-muted-foreground uppercase">
-                          Examine Precedent:
-                        </span>
-                        {sec.cited_cases.map((cid) => (
-                          <button
-                            key={cid}
-                            type="button"
-                            onClick={() => onInspectCase(cid)}
-                            className="border border-[#1D4ED8]/50 bg-[#1D4ED8]/10 px-2 py-0.5 text-[10px] font-semibold text-[#1D4ED8] dark:text-blue-300 hover:bg-[#1D4ED8] hover:text-white transition-colors cursor-pointer tabular-nums"
-                          >
-                            {cid} ↗
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </article>
-                ))}
-              </div>
-            </div>
+                )}
+              </article>
+            ))}
           </div>
         </div>
 
-        {/* Right Column: Reasoning Pattern Extraction (04_patterns.py) */}
-        <div className="xl:col-span-4 space-y-4">
-          {/* Outcome Distribution */}
-          <div className="border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-border pb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">
-                OUTCOME DISTRIBUTION (TOP-{research.legal_hits.length})
-              </span>
-              <span className="text-[10px] text-muted-foreground">
-                04_patterns.py
-              </span>
+        {/* Right Sidebar: Win Odds + Similar Past Cases */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Win / Outcome Likelihood Card */}
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-4">
+            <div>
+              <div className="text-xs font-medium text-muted-foreground">
+                Past Case Outcomes
+              </div>
+              <div className="mt-1 flex items-baseline justify-between">
+                <AnimatedCounter
+                  value={research.memorandum.winning_probability_pct}
+                  suffix="% Favorable"
+                  className="text-2xl font-bold text-[#1D4ED8] dark:text-blue-400"
+                />
+                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-foreground">
+                  Most common: {research.memorandum.dominant_outcome}
+                </span>
+              </div>
             </div>
-            <div className="space-y-2">
+
+            <div className="space-y-2.5 pt-2 border-t border-border">
               {Object.entries(research.patterns.outcome_distribution).map(
                 ([outcome, count]) => {
                   const pct = Math.round((count / totalOutcomes) * 100)
                   return (
                     <div key={outcome} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-medium">{outcome}</span>
-                        <span className="tabular-nums text-muted-foreground">
-                          {count} cases ({pct}%)
+                      <div className="flex justify-between text-xs">
+                        <span className="font-medium text-foreground">
+                          {outcome}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {count} of {totalOutcomes} cases ({pct}%)
                         </span>
                       </div>
-                      <div className="h-2 w-full bg-muted overflow-hidden">
+                      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
                         <div
-                          className="h-full bg-[#1D4ED8] dark:bg-blue-400 transition-all duration-300"
+                          className="h-full rounded-full bg-[#1D4ED8] dark:bg-blue-400"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -520,112 +420,60 @@ export function AgentWorkbench({
             </div>
           </div>
 
-          {/* Co-Cited Precedents (appearing in 2+ retrieved cases) */}
-          <div className="border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-border pb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">
-                CO-CITED ANCHOR PRECEDENTS (2+ CASES)
-              </span>
-              <span className="text-[10px] text-muted-foreground tabular-nums">
-                {research.patterns.co_cited_precedents.length} AUTHORITIES
-              </span>
+          {/* Similar Past Cases List */}
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">
+                Most Similar Past Cases
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Click any case to read its full facts and ruling.
+              </p>
             </div>
-            <div className="divide-y divide-border border border-border">
-              {research.patterns.co_cited_precedents
-                .slice(0, 8)
-                .map(([cit, count]) => {
-                  const isInternal = cit.startsWith('ILDC_')
-                  return (
-                    <div
-                      key={cit}
-                      className="flex items-center justify-between px-3 py-2 text-xs bg-background"
-                    >
-                      {isInternal ? (
-                        <button
-                          type="button"
-                          onClick={() => onInspectCase(cit)}
-                          className="font-semibold text-[#1D4ED8] dark:text-blue-300 hover:underline cursor-pointer text-left truncate"
-                        >
-                          {cit} ↗
-                        </button>
-                      ) : (
-                        <span className="font-medium text-foreground truncate">
-                          {cit}
-                        </span>
-                      )}
-                      <span className="shrink-0 border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums">
-                        {count}x cited
-                      </span>
-                    </div>
-                  )
-                })}
-            </div>
-          </div>
 
-          {/* Top Argument Motifs (TF-IDF Bigrams) */}
-          <div className="border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-border pb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">
-                ARGUMENT MOTIFS (TF-IDF BIGRAMS)
-              </span>
-              <span className="text-[10px] text-muted-foreground">TOP 12</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {research.patterns.argument_motifs
-                .slice(0, 12)
-                .map(([motif, score]) => (
-                  <div
-                    key={motif}
-                    className="flex items-center justify-between border border-border bg-background px-2.5 py-1.5 text-[11px]"
-                  >
-                    <span className="font-medium truncate">{motif}</span>
-                    <span className="text-[10px] text-muted-foreground tabular-nums ml-1">
-                      {score.toFixed(3)}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </div>
-
-          {/* Top Retrieved ILDC Cases List */}
-          <div className="border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-border pb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">
-                RETRIEVED ILDC CASES (`legal` MODEL)
-              </span>
-              <span className="text-[10px] text-muted-foreground tabular-nums">
-                k={research.legal_hits.length}
-              </span>
-            </div>
-            <div className="divide-y divide-border border border-border max-h-72 overflow-y-auto">
-              {research.legal_hits.map((hit, idx) => (
+            <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+              {research.legal_hits.slice(0, 8).map((hit, idx) => (
                 <button
                   key={hit.case_id}
                   type="button"
                   onClick={() => onInspectCase(hit.case_id)}
-                  className="flex w-full items-center justify-between gap-2 bg-background px-3 py-2 text-left text-xs hover:bg-muted/50 cursor-pointer"
+                  className="w-full rounded-lg border border-border bg-background p-3 text-left hover:border-[#1D4ED8]/50 hover:bg-muted/40 transition-colors cursor-pointer"
                 >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground tabular-nums">
-                        #{idx + 1}
-                      </span>
-                      <span className="font-bold text-[#1D4ED8] dark:text-blue-300 tabular-nums">
-                        {hit.case_id}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        [{hit.outcome}]
-                      </span>
-                    </div>
-                    <div className="truncate text-[11px] text-foreground/80">
-                      {hit.title}
-                    </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-semibold text-[#1D4ED8] dark:text-blue-300">
+                      #{idx + 1} · {hit.case_id}
+                    </span>
+                    <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
+                      {hit.outcome}
+                    </span>
                   </div>
-                  <span className="shrink-0 border border-border bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums">
-                    {hit.score.toFixed(3)}
-                  </span>
+                  <div className="mt-1 text-xs font-medium text-foreground line-clamp-2">
+                    {hit.title}
+                  </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">
+                    {hit.court} · {hit.date}
+                  </div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Key Authorities Cited */}
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs space-y-3">
+            <h3 className="text-sm font-semibold text-foreground">
+              Key Supreme Court Authorities
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {research.patterns.co_cited_precedents
+                .slice(0, 6)
+                .map(([cit, count]) => (
+                  <span
+                    key={cit}
+                    className="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-foreground"
+                  >
+                    {cit.replace(/_/g, ' ')} ({count}x)
+                  </span>
+                ))}
             </div>
           </div>
         </div>

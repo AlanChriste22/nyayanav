@@ -11,11 +11,11 @@ import "./app.css"
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>LEX-ILDC // Agentic Indian Legal Precedent Navigator</title>
+        <title>LexIndia — AI Legal Precedent & Memo Assistant</title>
         <meta
           name="description"
           content="Agentic AI Precedent Research, Dual-Model FAISS Vector Retrieval (InLegalBERT vs MiniLM), Reasoning Pattern Extraction, and Memorandum Drafting on the Indian Legal Documents Corpus (ILDC)."
