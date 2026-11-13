@@ -1,0 +1,10 @@
+# Core & optional scientific/API dependencies for the ILDC Legal Precedent Navigator
+numpy>=1.26.0
+pandas>=2.1.0
+matplotlib>=3.8.0
+scikit-learn>=1.4.0
+faiss-cpu>=1.8.0
+sentence-transformers>=2.7.0
+fastapi>=0.111.0
+uvicorn>=0.30.0
+pytest>=8.0.0
