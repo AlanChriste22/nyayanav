@@ -426,8 +426,7 @@ B.Tech – Computer Science and Engineering (Cyber Security)
 |---|---|
 | Alan Christe | Project Contributor |
 | Nivedhitha H E | Project Contributor |
-| Lekhana C S | Project Contributor |
-| Greeshma K | Project Contributor |
+
 
 **Project Guide:** Dr. Vijay Kumar A V, Professor
 
